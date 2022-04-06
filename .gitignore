@@ -1,6 +1,6 @@
 # Compiled class file
 *.class
-/target/
+target/
 
 # Log file
 *.log
@@ -29,4 +29,4 @@ hs_err_pid*
 
 
 
-/src/main/kotlin/gitignore/
+gitignore/

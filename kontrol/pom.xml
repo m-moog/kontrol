@@ -5,11 +5,11 @@
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>kontrol</artifactId>
-    <groupId>de.kontrol</groupId>
-    <version>1.0-SNAPSHOT</version>
+    <groupId>org.kontrol</groupId>
+    <version>pre-alpha</version>
     <packaging>jar</packaging>
 
-    <name>mainModule</name>
+    <name>kontrol</name>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -17,7 +17,7 @@
         <kotlin.compiler.jvmTarget>16</kotlin.compiler.jvmTarget>
         <maven.compiler.source>16</maven.compiler.source>
         <maven.compiler.target>16</maven.compiler.target>
-        <kotlin.version>1.6.10</kotlin.version>
+        <kotlin.version>1.6.20</kotlin.version>
     </properties>
 
     <dependencies>

@@ -222,12 +222,10 @@ object Kontrol{
                 }
 
             var isFatal = actualException !is KontrolException
-            println("fatal? $isFatal")
+
             var nextCause = actualException.cause
             while(nextCause?.cause != null){
-                println("checking $nextCause")
                 if(nextCause is FatalKontrolError){
-                    println("it is fatal")
                     isFatal = true
                 }
                 nextCause = nextCause.cause
