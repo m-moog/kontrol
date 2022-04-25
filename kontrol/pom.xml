@@ -17,14 +17,20 @@
         <kotlin.compiler.jvmTarget>16</kotlin.compiler.jvmTarget>
         <maven.compiler.source>16</maven.compiler.source>
         <maven.compiler.target>16</maven.compiler.target>
+
         <kotlin.version>1.6.20</kotlin.version>
     </properties>
 
     <dependencies>
         <dependency>
+            <groupId>org.mockito.kotlin</groupId>
+            <artifactId>mockito-kotlin</artifactId>
+            <version>4.0.0</version>
+        </dependency>
+        <dependency>
             <groupId>org.jetbrains.kotlin</groupId>
             <artifactId>kotlin-reflect</artifactId>
-            <version>1.6.10</version>
+            <version>${kotlin.version}</version>
         </dependency>
         <dependency>
             <groupId>org.reflections</groupId>
@@ -35,12 +41,6 @@
             <groupId>org.jetbrains.kotlin</groupId>
             <artifactId>kotlin-test-junit5</artifactId>
             <version>${kotlin.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-engine</artifactId>
-            <version>5.8.2</version>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.jetbrains.kotlin</groupId>
@@ -84,6 +84,12 @@
             <plugin>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>2.22.2</version>
+                <configuration>
+                    <includes>
+                        <include>*Test*.class</include>
+                    </includes>
+                    <failIfNoTests>true</failIfNoTests>
+                </configuration>
             </plugin>
             <plugin>
                 <artifactId>maven-failsafe-plugin</artifactId>

@@ -1,5 +1,6 @@
 package org.kontrol.logging
 
+import java.security.Permission
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
@@ -14,6 +15,8 @@ class LinearExecutor(
     private var currentMode = Mode.RUN
 
     init {
+        System.setSecurityManager(MySecurityManager())
+
         thread(name = EXECUTOR_THREAD_NAME) { run() }
         thread(name = "MainThreadFinishedListener") { mainThreadFinishedListener() }
     }
@@ -45,5 +48,15 @@ class LinearExecutor(
     data class Duration(val i: Long, val unit: TimeUnit)
     companion object {
         const val EXECUTOR_THREAD_NAME = "LinearExecutor"
+    }
+}
+
+class MySecurityManager: SecurityManager(){
+    override fun checkExit(status: Int) {
+        throw SecurityException("Illegal termination of <${LinearExecutor::class.qualifiedName}>")
+    }
+
+    override fun checkPermission(perm: Permission?) {
+
     }
 }

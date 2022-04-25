@@ -15,46 +15,64 @@ import kotlin.reflect.KClass
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.test.currentStackTrace
 
-private var conf: KontrolConfig? = null
 
 fun kontrol(contextSupplier: KontrolConfigurationContext.() -> Unit = {}){
-    conf = KontrolConfigurationContext().also(contextSupplier).config
+    val kontrolConfig = KontrolConfigurationContext().also(contextSupplier).config
     try {
-        Kontrol
+        Kontrol.init(kontrolConfig)
     }catch(e: Throwable){
-        Kontrol.ErrorHandler.handleTopMostException(e, conf?.logger ?: KLog())
+        Kontrol.ErrorHandler.handleTopMostException(e, kontrolConfig.logger)
     }
 }
 
 class KontrolConfigurationContext{
     lateinit var packages: Array<String>
     var logger: Logger = KLog()
+    var reflections: Reflections? = null
 
     val config: KontrolConfig
         get() {
-        return KontrolConfig(packages.asList(), logger)
+        return KontrolConfig(
+            packages = packages.asList(),
+            logger = logger,
+            reflections = reflections
+        )
     }
 }
 
-data class KontrolConfig(val packages: List<String>, val logger: Logger)
+data class KontrolConfig(
+    val packages: List<String>,
+    val logger: Logger,
+    val reflections: Reflections?
+)
 
 object Kontrol{
-    private val config = conf ?: ErrorHandler.handleConfigNotPresent()
-    val logger = config.logger
+    private lateinit var config: KontrolConfig
+    lateinit var logger: Logger
 
-    private val reflections = Reflections(
-        ConfigurationBuilder()
-            .setScanners(Scanners.TypesAnnotated, Scanners.SubTypes)
-            .forPackages(*config.packages.toTypedArray())
-    )
+    private lateinit var reflections: Reflections
 
-    private val classesWithResolvedTypes: Set<ClassWithResolvedTypes<*>>
+    private lateinit var classesWithResolvedTypes: Set<ClassWithResolvedTypes<*>>
 
     private val kontrolledClasses: MutableSet<KontrolClass<out Kontrolled>> = mutableSetOf()
-    private val kontrolledInstances: MutableMap<Thread, MutableMap<KontrolClass<out Kontrolled>, Kontrolled>> =
-        mutableMapOf(Thread.currentThread() to mutableMapOf())
+    private val kontrolledInstances: MutableMap<Thread, MutableMap<KontrolClass<out Kontrolled>, Kontrolled>> = mutableMapOf()
 
-    init {
+    fun init(config: KontrolConfig) {
+        this.config = config
+        this.logger = config.logger
+        this.reflections = config.reflections ?: Reflections(ConfigurationBuilder()
+            .setScanners(Scanners.SubTypes)
+            .forPackages(*config.packages.toTypedArray()))
+
+        kontrolledClasses.clear()
+        kontrolledInstances.clear()
+
+        kontrolledInstances[Thread.currentThread()] = mutableMapOf()
+
+        init()
+    }
+
+    private fun init(){
         logger.info{ "Starting Framework. Starting scan for packages ${config.packages}" }
 
         classesWithResolvedTypes = reflections.getSubTypesOf(Kontrolled::class.java)
@@ -90,13 +108,13 @@ object Kontrol{
     }
 
     private fun <T: Kontrolled> resolveConstructorDependencies(clazzWRT: ClassWithResolvedTypes<T>): List<KontrolClass.InjectableConstructor<T>> {
-        logger.debug { "Resolving constructor dependencies for class <${clazzWRT.clazz.name}> with ${clazzWRT.constructorsWithArgTypes.size} constructors" }//+
+        logger.debug { "Resolving constructor dependencies for class <${clazzWRT.clazz.name}> with ${clazzWRT.constructorsWithArgTypes.size} constructors" }
 
         return clazzWRT
             .constructorsWithArgTypes
             .map { constructor ->
                 logger.debug { "Resolving constructor <$constructor>" }
-                constructor.argTypes.map { arg -> classesWithResolvedTypes.findByClass(arg as Class<Kontrolled>) }
+                constructor.argTypes.mapNotNull { arg -> classesWithResolvedTypes.findByClassOrNull(arg as Class<Kontrolled>) }
                     .map {
                         logger.debug { "Resolving constructor parameter of type <${it.clazz.name}>" }
                         resolveFullDependencyTree(it)
@@ -123,7 +141,7 @@ object Kontrol{
                 logger.debug { "Resolved KProperty '$name' to be of type <${jClass.name}>" }
                 return@map jClass
             }
-            .map { classesWithResolvedTypes.findByClass(it) }
+            .mapNotNull { classesWithResolvedTypes.findByClassOrNull(it) }
             .map {
                 logger.debug { "Resolving injected field of type <${it.clazz.name}>" }
                 resolveFullDependencyTree(it)
@@ -132,8 +150,8 @@ object Kontrol{
             .toList()
     }
 
-    private fun <T: Kontrolled> Set<ClassWithResolvedTypes<*>>.findByClass(clazz: Class<T>): ClassWithResolvedTypes<T> {
-        return first { clazz.isAssignableFrom(it.clazz) } as ClassWithResolvedTypes<T>
+    private fun <T: Kontrolled> Set<ClassWithResolvedTypes<*>>.findByClassOrNull(clazz: Class<T>): ClassWithResolvedTypes<T>? {
+        return firstOrNull { clazz.isAssignableFrom(it.clazz) } as ClassWithResolvedTypes<T>?
     }
 
     private fun executeExecutables() {
@@ -157,7 +175,9 @@ object Kontrol{
     }
 
     fun <T> findInstance(clazz: Class<*>, thread: Thread): T{
-        return findInstance(kontrolledClasses.first { clazz.isAssignableFrom(it.clazz) }, thread) as T
+        val controlledClass = kontrolledClasses.firstOrNull { clazz.isAssignableFrom(it.clazz) }
+            ?: ErrorHandler.handleNoMatchingClassFound(clazz, thread)
+        return findInstance(controlledClass, thread) as T
     }
 
     @Suppress("MemberVisibilityCanBePrivate")
@@ -237,14 +257,6 @@ object Kontrol{
             else {
                 logger.error(actualException) { "An Exception occurred" }
             }
-        }
-
-        fun handleConfigNotPresent(): Nothing {
-            throw NullPointerException(
-                "${KontrolConfig::class.simpleName} '${::conf.name}' has not yet been initialized. " +
-                        "Make sure the Framework has been started properly " +
-                        "before trying to access the ${Kontrol::class.simpleName} instance."
-            )
         }
 
         data class InstanceCreationExceptionMetadata(
@@ -351,6 +363,10 @@ object Kontrol{
 
         fun handleNonKontrolClass(type: KontrolClass<*>, thread: Thread): Nothing {
             throw KontrolException("Attempted to find instance for non Framework Class <${type.clazz.name}> for thread <$thread>")
+        }
+
+        fun handleNoMatchingClassFound(clazz: Class<*>, thread: Thread): KontrolClass<out Kontrolled> {
+            throw KontrolException("Could not find instance for class <${clazz.name}> for thread <$thread>")
         }
     }
 }

@@ -7,7 +7,13 @@ import org.kontrol.logging.KLog
 object LoggerFactory {
     @JvmStatic
     fun getLogger(unused: Class<*>?): Logger {
-        return LoggerAdapter(Kontrol.logger)
+        val logger = try {
+            Kontrol.logger
+        }catch(e: Throwable){
+            KLog()
+        }
+
+        return LoggerAdapter(logger)
     }
 }
 
